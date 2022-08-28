@@ -47,6 +47,7 @@ resource "aws_iam_role_policy_attachment" "s3_policy_attach" {
 
 resource "aws_api_gateway_rest_api" "rest_api" {
   name = var.rest_api_name
+  binary_media_types = ["application/octet-stream", "image/jpeg"]
 }
 
 resource "aws_api_gateway_resource" "rest_api_resource" {
@@ -61,21 +62,8 @@ resource "aws_api_gateway_method" "rest_api_get_method" {
   http_method = "GET"
   authorization = "NONE"
   request_parameters = {
-    "method.request.path.object": true,
-    "method.request.path.bucket": true
+    "method.request.querystring.key": true,
   }
-}
-
-resource "aws_api_gateway_resource" "bucket" {
-  rest_api_id = aws_api_gateway_rest_api.rest_api.id
-  parent_id = aws_api_gateway_resource.rest_api_resource.id
-  path_part = "{bucket}"
-}
-
-resource "aws_api_gateway_resource" "Item" {
-  rest_api_id = aws_api_gateway_rest_api.rest_api.id
-  parent_id = aws_api_gateway_resource.bucket.id
-  path_part = "{object}"
 }
 
 resource "aws_api_gateway_method_response" "response200" {
@@ -159,15 +147,22 @@ resource "aws_api_gateway_deployment" "S3APIDeployment" {
   depends_on = [
     aws_api_gateway_integration.s3_integration]
   rest_api_id = aws_api_gateway_rest_api.rest_api.id
-  stage_name = "MyS3"
+  stage_name = "v1"
 }
 
 resource "aws_api_gateway_integration" "s3_integration" {
+  depends_on = [aws_api_gateway_method.rest_api_get_method]
   http_method = aws_api_gateway_method.rest_api_get_method.http_method
   resource_id = aws_api_gateway_resource.rest_api_resource.id
   rest_api_id = aws_api_gateway_rest_api.rest_api.id
   type = "AWS"
-  uri = "arn:aws:apigateway:${var.region}:s3:path//{bucket}/{object}"
+  uri = "arn:aws:apigateway:${var.region}:s3:path/{key}"
   credentials = aws_iam_role.s3_api_gateway_role.arn
   integration_http_method = "GET"
+  passthrough_behavior = "WHEN_NO_MATCH"
+  content_handling = "CONVERT_TO_BINARY"
+
+  request_parameters = {
+    "integration.request.path.key": "method.request.querystring.key"
+  }
 }
