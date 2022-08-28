@@ -1,0 +1,4 @@
+/.terraform/
+/openapi.json
+/terraform.tfstate
+/terraform.tfstate.backup
